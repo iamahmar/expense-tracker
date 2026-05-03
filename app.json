@@ -3,13 +3,25 @@
     "name": "ExpenseTracker",
     "slug": "expense-tracker",
     "version": "1.0.0",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
-      "supportsTabletMode": true
+      "supportsTabletMode": true,
+      "bundleIdentifier": "com.iamfrost7.expensetracker",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png"
+      },
+      "package": "com.iamfrost7.expensetracker"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "c59866ad-6f22-4e8e-a1ab-eeee43a482b5"
       }
     }
   },
