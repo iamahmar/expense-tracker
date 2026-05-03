@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  Alert, ScrollView, Platform, Modal, FlatList, Switch
+  Alert, ScrollView, Platform, Modal, FlatList, Switch, Image
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { getThemeColors, Typography, Spacing, Radius, Shadow } from '../theme';
@@ -191,9 +191,9 @@ export default function SettingsScreen() {
 
       {/* About */}
       <View style={styles.sectionCard}>
-        <View style={styles.sectionHeader}>
-          <MaterialIcons name="info" size={18} color={Colors.accent} />
-          <Text style={styles.sectionTitle}>About</Text>
+        <View style={styles.aboutHeaderWrap}>
+          <Image source={require('../../assets/icon.png')} style={styles.aboutLogo} />
+          <Text style={styles.aboutAppName}>Expense Tracker</Text>
         </View>
         <View style={styles.aboutRow}>
           <Text style={styles.aboutKey}>App</Text>
@@ -317,6 +317,9 @@ const getStyles = (Colors) => StyleSheet.create({
   statLabel: { fontFamily: Typography.regular, fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
   statDivider: { width: 1, height: 40, backgroundColor: Colors.divider },
 
+  aboutHeaderWrap: { alignItems: 'center', marginBottom: Spacing.lg, paddingVertical: Spacing.sm },
+  aboutLogo: { width: 96, height: 96, borderRadius: 24, marginBottom: Spacing.sm },
+  aboutAppName: { fontFamily: Typography.bold, fontSize: 18, color: Colors.textPrimary },
   aboutRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.divider },
   aboutKey: { fontFamily: Typography.regular, fontSize: 14, color: Colors.textSecondary },
   aboutVal: { fontFamily: Typography.medium, fontSize: 14, color: Colors.textPrimary },

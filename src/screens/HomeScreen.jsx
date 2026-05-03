@@ -3,7 +3,7 @@ import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   FlatList, Animated, Alert, ActivityIndicator,
-  StatusBar, Platform, Pressable, LayoutAnimation, UIManager,
+  StatusBar, Platform, Pressable, LayoutAnimation, UIManager, Image
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
@@ -350,7 +350,10 @@ export default function HomeScreen({ navigation }) {
 
       {/* Sticky floating header */}
       <Animated.View style={[styles.stickyHeader, { backgroundColor: headerBg, shadowOpacity: headerElevation }]}>
-        <Text style={styles.headerTitle}>Expense Tracker</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <Image source={require('../../assets/icon.png')} style={styles.headerLogo} />
+          <Text style={styles.headerTitle}>Expense Tracker</Text>
+        </View>
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={[styles.headerBtn, styles.headerBtnPrimary]}
@@ -548,6 +551,7 @@ const get_styles = (Colors) => StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowRadius: 8,
     elevation: 4,
   },
+  headerLogo: { width: 40, height: 45, borderRadius: 10 },
   headerTitle: { fontFamily: Typography.bold, fontSize: 22, color: Colors.textPrimary },
   headerActions: { flexDirection: 'row', gap: 8 },
   headerBtn: {
