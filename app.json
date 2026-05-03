@@ -3,6 +3,12 @@
     "name": "ExpenseTracker",
     "slug": "expense-tracker",
     "version": "1.0.0",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1b1b4d"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -14,6 +20,10 @@
       }
     },
     "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1b1b4d"
+      },
       "package": "com.iamfrost7.expensetracker"
     },
     "extra": {
