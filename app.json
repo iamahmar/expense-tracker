@@ -14,9 +14,6 @@
       }
     },
     "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png"
-      },
       "package": "com.iamfrost7.expensetracker"
     },
     "extra": {
