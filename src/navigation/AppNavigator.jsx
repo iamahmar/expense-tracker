@@ -9,6 +9,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   useTheme, Typography, Spacing, Radius, Shadow, Animation,
@@ -136,7 +137,8 @@ function TabButton({ tab, focused, onPress, onLongPress }) {
 // ─── Custom Tab Bar ───────────────────────────────────────────────────────────
 function CustomTabBar({ state, descriptors, navigation }) {
   const Colors = useTheme();
-  const styles = useMemo(() => get_styles(Colors), [Colors]);
+  const insets = useSafeAreaInsets();
+  const styles = useMemo(() => get_styles(Colors, insets), [Colors, insets]);
 
   return (
     <View style={styles.tabBarOuter}>
@@ -269,7 +271,7 @@ const TAB_HEIGHT_IOS = 82;
 const TAB_HEIGHT_ANDROID = 68;
 const TAB_HEIGHT = Platform.OS === 'ios' ? TAB_HEIGHT_IOS : TAB_HEIGHT_ANDROID;
 
-const get_styles = (Colors) => StyleSheet.create({
+const get_styles = (Colors, insets = { bottom: 0 }) => StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
 
   // ── Tab bar shell ──
@@ -277,7 +279,7 @@ const get_styles = (Colors) => StyleSheet.create({
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
     // Safe-area padding
-    paddingBottom: Platform.OS === 'ios' ? 24 : 0,
+    paddingBottom: insets.bottom > 0 ? insets.bottom : (Platform.OS === 'ios' ? 24 : 12),
     backgroundColor: 'transparent',
   },
   tabBarInner: {

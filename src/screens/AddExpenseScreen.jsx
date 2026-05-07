@@ -200,6 +200,7 @@ export default function AddExpenseScreen({ navigation, route }) {
           value={date}
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          themeVariant={settings.theme === 'light' ? 'light' : 'dark'}
           maximumDate={new Date()}
           onChange={(_, d) => { setShowDate(false); if (d) setDate(d); }}
         />
