@@ -1,21 +1,104 @@
 // screens/SettingsScreen.jsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  Alert, ScrollView, Platform, Modal, FlatList, Switch, Image
+  Alert, ScrollView, Platform, Modal, FlatList, Image,
+  Animated, Pressable,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { getThemeColors, Typography, Spacing, Radius, Shadow } from '../theme';
 import { useApp } from '../context/AppContext';
+import { useLayers } from '../context/LayerContext';
 import { CURRENCIES } from '../utils/storage';
 import { formatAmount } from '../utils/helpers';
 
-export default function SettingsScreen() {
-  const { settings, updateSettings, clearData, transactions } = useApp();
+// ─── Animated Theme Toggle ─────────────────────────────────────────────────────
+const TOGGLE_W  = 58;
+const TOGGLE_H  = 30;
+const THUMB_SZ  = 24;
+const THUMB_OFF = 3; // gap from edge
+
+function AnimatedThemeToggle({ value, onToggle, activeColor }) {
+  const animVal = useRef(new Animated.Value(value ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.spring(animVal, {
+      toValue: value ? 1 : 0,
+      useNativeDriver: false,
+      damping: 15,
+      mass: 0.8,
+      stiffness: 180,
+    }).start();
+  }, [value]);
+
+  const thumbX = animVal.interpolate({
+    inputRange: [0, 1],
+    outputRange: [THUMB_OFF, TOGGLE_W - THUMB_SZ - THUMB_OFF],
+  });
+
+  const trackColor = animVal.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['rgba(100,100,120,0.35)', activeColor],
+  });
+
+  const sunOpacity  = animVal.interpolate({ inputRange: [0, 0.5], outputRange: [1, 0], extrapolate: 'clamp' });
+  const moonOpacity = animVal.interpolate({ inputRange: [0.5, 1], outputRange: [0, 1], extrapolate: 'clamp' });
+
+  return (
+    <Pressable onPress={() => onToggle(!value)}>
+      <Animated.View style={{
+        width: TOGGLE_W, height: TOGGLE_H, borderRadius: TOGGLE_H / 2,
+        backgroundColor: trackColor, justifyContent: 'center',
+        // glow when dark is active
+        shadowColor: activeColor,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: value ? 0.45 : 0,
+        shadowRadius: 8,
+        elevation: value ? 6 : 0,
+      }}>
+        {/* Sliding thumb */}
+        <Animated.View style={{
+          position: 'absolute',
+          left: thumbX,
+          width: THUMB_SZ, height: THUMB_SZ, borderRadius: THUMB_SZ / 2,
+          backgroundColor: '#fff',
+          alignItems: 'center', justifyContent: 'center',
+          shadowColor: '#000', shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: 0.2, shadowRadius: 3, elevation: 3,
+        }}>
+          {/* Sun icon — shown when light */}
+          <Animated.View style={{ position: 'absolute', opacity: sunOpacity }}>
+            <MaterialIcons name="wb-sunny" size={13} color="#F97316" />
+          </Animated.View>
+          {/* Moon icon — shown when dark */}
+          <Animated.View style={{ position: 'absolute', opacity: moonOpacity }}>
+            <MaterialIcons name="nights-stay" size={13} color="#6366F1" />
+          </Animated.View>
+        </Animated.View>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+export default function SettingsScreen({ navigation }) {
+
+  const { settings, updateSettings, clearData, allTransactions } = useApp();
+  const { activeLayer, editLayer } = useLayers();
   const Colors = getThemeColors(settings.theme);
   const styles = useMemo(() => getStyles(Colors), [Colors]);
 
-  const [budget, setBudget] = useState(String(settings.monthlyBudget));
+  // Layer-scoped settings (fall back to global if no active layer)
+  const layerBudget   = activeLayer?.monthlyBudget ?? settings.monthlyBudget;
+  const layerCurrency = activeLayer?.currency ?? settings.currency;
+  const layerCurrCode = activeLayer?.currencyCode ?? settings.currencyCode;
+
+  // Layer-scoped transactions
+  const transactions = useMemo(() => {
+    if (!activeLayer) return allTransactions;
+    return allTransactions.filter(t => t.layerId === activeLayer.id || (!t.layerId && activeLayer.id === 'layer_default'));
+  }, [allTransactions, activeLayer]);
+
+  const [budget, setBudget] = useState(String(layerBudget));
   const [editingBudget, setEditingBudget] = useState(false);
   const [showCurrency, setShowCurrency] = useState(false);
 
@@ -27,8 +110,8 @@ export default function SettingsScreen() {
     })
     .reduce((s, t) => s + parseFloat(t.amount), 0);
 
-  const budgetPct = (totalExpense / settings.monthlyBudget) * 100;
-  const exceeded = totalExpense > settings.monthlyBudget;
+  const budgetPct = (totalExpense / layerBudget) * 100;
+  const exceeded  = totalExpense > layerBudget;
 
   const saveBudget = async () => {
     const val = parseFloat(budget);
@@ -36,7 +119,11 @@ export default function SettingsScreen() {
       Alert.alert('Invalid Budget', 'Enter a positive number');
       return;
     }
-    await updateSettings({ monthlyBudget: val });
+    if (activeLayer) {
+      await editLayer({ ...activeLayer, monthlyBudget: val });
+    } else {
+      await updateSettings({ monthlyBudget: val });
+    }
     setEditingBudget(false);
   };
 
@@ -52,7 +139,11 @@ export default function SettingsScreen() {
   };
 
   const handleCurrencySelect = async (curr) => {
-    await updateSettings({ currency: curr.symbol, currencyCode: curr.code });
+    if (activeLayer) {
+      await editLayer({ ...activeLayer, currency: curr.symbol, currencyCode: curr.code });
+    } else {
+      await updateSettings({ currency: curr.symbol, currencyCode: curr.code });
+    }
     setShowCurrency(false);
   };
 
@@ -62,6 +153,16 @@ export default function SettingsScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Settings</Text>
+        {activeLayer && (
+          <TouchableOpacity
+            style={[styles.layerBadge, { backgroundColor: activeLayer.color + '22', borderColor: activeLayer.color + '55' }]}
+            onPress={() => navigation.navigate('Layers')}
+          >
+            <MaterialIcons name={activeLayer.icon} size={14} color={activeLayer.color} />
+            <Text style={[styles.layerBadgeText, { color: activeLayer.color }]}>{activeLayer.name}</Text>
+            <MaterialIcons name="chevron-right" size={14} color={activeLayer.color} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Budget Section */}
@@ -74,7 +175,7 @@ export default function SettingsScreen() {
         <View style={styles.budgetDisplay}>
           {editingBudget ? (
             <View style={styles.budgetEditRow}>
-              <Text style={styles.currSymbol}>{settings.currency}</Text>
+              <Text style={styles.currSymbol}>{layerCurrency}</Text>
               <TextInput
                 style={styles.budgetInput}
                 value={budget}
@@ -86,14 +187,14 @@ export default function SettingsScreen() {
               <TouchableOpacity style={styles.budgetSaveBtn} onPress={saveBudget}>
                 <MaterialIcons name="check" size={18} color="#fff" />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.budgetCancelBtn} onPress={() => { setBudget(String(settings.monthlyBudget)); setEditingBudget(false); }}>
+              <TouchableOpacity style={styles.budgetCancelBtn} onPress={() => { setBudget(String(layerBudget)); setEditingBudget(false); }}>
                 <MaterialIcons name="close" size={18} color={Colors.textSecondary} />
               </TouchableOpacity>
             </View>
           ) : (
             <TouchableOpacity style={styles.budgetRow} onPress={() => setEditingBudget(true)}>
               <Text style={styles.budgetAmount}>
-                {formatAmount(settings.monthlyBudget, settings.currency)}
+                {formatAmount(layerBudget, layerCurrency)}
               </Text>
               <MaterialIcons name="edit" size={18} color={Colors.textMuted} />
             </TouchableOpacity>
@@ -109,8 +210,8 @@ export default function SettingsScreen() {
           />
           <Text style={[styles.budgetStatusText, { color: exceeded ? Colors.warning : Colors.success }]}>
             {exceeded
-              ? `Over by ${formatAmount(totalExpense - settings.monthlyBudget, settings.currency)}`
-              : `${Math.round(budgetPct)}% used — ${formatAmount(settings.monthlyBudget - totalExpense, settings.currency)} remaining`
+              ? `Over by ${formatAmount(totalExpense - layerBudget, layerCurrency)}`
+              : `${Math.round(budgetPct)}% used — ${formatAmount(layerBudget - totalExpense, layerCurrency)} remaining`
             }
           </Text>
         </View>
@@ -132,11 +233,11 @@ export default function SettingsScreen() {
 
         <TouchableOpacity style={styles.currencyRow} onPress={() => setShowCurrency(true)}>
           <View style={styles.currencyLeft}>
-            <Text style={styles.currencySymbolBig}>{settings.currency}</Text>
+            <Text style={styles.currencySymbolBig}>{layerCurrency}</Text>
             <View>
-              <Text style={styles.currencyCode}>{settings.currencyCode}</Text>
+              <Text style={styles.currencyCode}>{layerCurrCode}</Text>
               <Text style={styles.currencyName}>
-                {CURRENCIES.find(c => c.code === settings.currencyCode)?.label || 'Currency'}
+                {CURRENCIES.find(c => c.code === layerCurrCode)?.label || 'Currency'}
               </Text>
             </View>
           </View>
@@ -151,12 +252,25 @@ export default function SettingsScreen() {
           <Text style={styles.sectionTitle}>Appearance</Text>
         </View>
         <View style={styles.appearanceRow}>
-          <Text style={styles.appearanceLabel}>Dark Theme</Text>
-          <Switch
+          <View style={styles.appearanceLeft}>
+            <View style={[styles.themeIconBadge, { backgroundColor: Colors.accentMuted }]}>
+              <MaterialIcons
+                name={settings.theme === 'light' ? 'wb-sunny' : 'nights-stay'}
+                size={16}
+                color={Colors.accent}
+              />
+            </View>
+            <View>
+              <Text style={styles.appearanceLabel}>
+                {settings.theme === 'light' ? 'Light Mode' : 'Dark Mode'}
+              </Text>
+              <Text style={styles.appearanceSub}>Tap to toggle</Text>
+            </View>
+          </View>
+          <AnimatedThemeToggle
             value={settings.theme !== 'light'}
-            onValueChange={(val) => updateSettings({ theme: val ? 'dark' : 'light' })}
-            trackColor={{ false: Colors.textMuted, true: Colors.accent }}
-            thumbColor="#fff"
+            onToggle={(val) => updateSettings({ theme: val ? 'dark' : 'light' })}
+            activeColor={Colors.accent}
           />
         </View>
       </View>
@@ -182,7 +296,7 @@ export default function SettingsScreen() {
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
             <Text style={[styles.statValue, { color: Colors.accent }]}>
-              {formatAmount(totalExpense, settings.currency)}
+              {formatAmount(totalExpense, layerCurrency)}
             </Text>
             <Text style={styles.statLabel}>This Month</Text>
           </View>
@@ -231,7 +345,7 @@ export default function SettingsScreen() {
             {CURRENCIES.map(curr => (
               <TouchableOpacity
                 key={curr.code}
-                style={[styles.currencyOption, settings.currencyCode === curr.code && styles.currencyOptionActive]}
+                style={[styles.currencyOption, layerCurrCode === curr.code && styles.currencyOptionActive]}
                 onPress={() => handleCurrencySelect(curr)}
               >
                 <Text style={styles.currencyOptionSymbol}>{curr.symbol}</Text>
@@ -239,7 +353,7 @@ export default function SettingsScreen() {
                   <Text style={styles.currencyOptionCode}>{curr.code}</Text>
                   <Text style={styles.currencyOptionName}>{curr.label}</Text>
                 </View>
-                {settings.currencyCode === curr.code && (
+                {layerCurrCode === curr.code && (
                   <MaterialIcons name="check-circle" size={20} color={Colors.accent} style={{ marginLeft: 'auto' }} />
                 )}
               </TouchableOpacity>
@@ -263,6 +377,12 @@ const getStyles = (Colors) => StyleSheet.create({
     paddingBottom: Spacing.md,
   },
   headerTitle: { fontFamily: Typography.bold, fontSize: 26, color: Colors.textPrimary },
+  layerBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: Radius.full,
+    borderWidth: 1, marginTop: 8, alignSelf: 'flex-start',
+  },
+  layerBadgeText: { fontFamily: Typography.medium, fontSize: 12 },
 
   sectionCard: {
     marginHorizontal: Spacing.base, marginBottom: Spacing.lg,
@@ -308,8 +428,11 @@ const getStyles = (Colors) => StyleSheet.create({
   currencyCode: { fontFamily: Typography.semiBold, fontSize: 14, color: Colors.textPrimary },
   currencyName: { fontFamily: Typography.regular, fontSize: 12, color: Colors.textSecondary },
 
-  appearanceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
+  appearanceRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
+  appearanceLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  themeIconBadge: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   appearanceLabel: { fontFamily: Typography.medium, fontSize: 15, color: Colors.textPrimary },
+  appearanceSub: { fontFamily: Typography.regular, fontSize: 11, color: Colors.textMuted, marginTop: 1 },
 
   statsGrid: { flexDirection: 'row', alignItems: 'center' },
   statItem: { flex: 1, alignItems: 'center' },

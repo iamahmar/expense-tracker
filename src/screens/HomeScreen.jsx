@@ -9,6 +9,7 @@ import { Swipeable } from 'react-native-gesture-handler';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme, Typography, Spacing, Radius, Shadow, getCategoryById } from '../theme';
 import { useApp } from '../context/AppContext';
+import { useLayers } from '../context/LayerContext';
 import {
   formatAmount, formatAmountFull, formatDate,
   filterByMonth, isThisWeek, isThisMonth,
@@ -277,7 +278,19 @@ export default function HomeScreen({ navigation }) {
   const txnStyles = useMemo(() => get_txnStyles(Colors), [Colors]);
   const styles = useMemo(() => get_styles(Colors), [Colors]);
 
-  const { transactions, settings, loading, deleteTransaction } = useApp();
+  const { allTransactions, settings, loading, deleteTransaction } = useApp();
+  const { activeLayer, layersLoading } = useLayers();
+
+  // Scope transactions to the active layer
+  const transactions = useMemo(() => {
+    if (!activeLayer) return allTransactions;
+    return allTransactions.filter(t => t.layerId === activeLayer.id || !t.layerId && activeLayer.id === 'layer_default');
+  }, [allTransactions, activeLayer]);
+
+  // Layer-specific settings override global
+  const layerCurrency = activeLayer?.currency ?? settings.currency;
+  const layerBudget   = activeLayer?.monthlyBudget ?? settings.monthlyBudget;
+
   const [filter, setFilter] = useState('This Month');
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [selectedMonth] = useState(new Date());
@@ -301,9 +314,9 @@ export default function HomeScreen({ navigation }) {
     return { income, expense, net: income - expense };
   }, [transactions, selectedMonth]);
 
-  const budgetUsed = settings.monthlyBudget ? (monthlyTotals.expense / settings.monthlyBudget) * 100 : 0;
-  const budgetExceeded = monthlyTotals.expense > settings.monthlyBudget;
-  const isPositiveNet = monthlyTotals.net >= 0;
+  const budgetUsed    = layerBudget ? (monthlyTotals.expense / layerBudget) * 100 : 0;
+  const budgetExceeded = monthlyTotals.expense > layerBudget;
+  const isPositiveNet  = monthlyTotals.net >= 0;
 
   // Animated header compression on scroll
   const headerBg = scrollY.interpolate({ inputRange: [0, 60], outputRange: ['transparent', Colors.bg], extrapolate: 'clamp' });
@@ -335,10 +348,10 @@ export default function HomeScreen({ navigation }) {
     ? Math.round((monthlyTotals.net / monthlyTotals.income) * 100)
     : 0;
 
-  if (loading) {
+  if (loading || layersLoading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.accent} />
+        <ActivityIndicator size="large" color={activeLayer?.color ?? Colors.accent} />
         <Text style={styles.loadingText}>Loading your finances…</Text>
       </View>
     );
@@ -350,10 +363,28 @@ export default function HomeScreen({ navigation }) {
 
       {/* Sticky floating header */}
       <Animated.View style={[styles.stickyHeader, { backgroundColor: headerBg, shadowOpacity: headerElevation }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <Image source={require('../../assets/icon.png')} style={styles.headerLogo} />
-          <Text style={styles.headerTitle}>Expense Tracker</Text>
-        </View>
+        <TouchableOpacity
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}
+          onPress={() => navigation.navigate('Layers')}
+          activeOpacity={0.75}
+        >
+          {activeLayer ? (
+            <View style={[styles.headerLayerIcon, { backgroundColor: activeLayer.color + '22' }]}>
+              <MaterialIcons name={activeLayer.icon} size={22} color={activeLayer.color} />
+            </View>
+          ) : (
+            <Image source={require('../../assets/icon.png')} style={styles.headerLogo} />
+          )}
+          <View>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {activeLayer?.name ?? 'Expense Tracker'}
+            </Text>
+            {activeLayer && (
+              <Text style={styles.headerSubtitle}>Tap to switch layer</Text>
+            )}
+          </View>
+          <MaterialIcons name="unfold-more" size={16} color={Colors.textMuted} />
+        </TouchableOpacity>
         <View style={styles.headerActions}>
           <TouchableOpacity
             style={[styles.headerBtn, styles.headerBtnPrimary]}
@@ -371,13 +402,13 @@ export default function HomeScreen({ navigation }) {
         scrollEventThrottle={16}
       >
         {/* Hero Summary Card */}
-        <View style={styles.heroCard}>
+        <View style={[styles.heroCard, activeLayer && { borderColor: activeLayer.color + '44' }]}>
           {/* Top row: net + budget badge */}
           <View style={styles.heroTop}>
             <View>
               <Text style={styles.heroLabel}>Net Balance · {new Date().toLocaleString('default', { month: 'long' })}</Text>
               <Text style={[styles.heroBalance, { color: isPositiveNet ? Colors.income : Colors.accent }]}>
-                {isPositiveNet ? '+' : ''}{formatAmountFull(monthlyTotals.net, settings.currency)}
+                {isPositiveNet ? '+' : ''}{formatAmountFull(monthlyTotals.net, layerCurrency)}
               </Text>
             </View>
             <View style={[styles.trendBadge, { backgroundColor: isPositiveNet ? Colors.incomeLight : Colors.expenseLight }]}>
@@ -397,7 +428,7 @@ export default function HomeScreen({ navigation }) {
             <StatPill
               icon="arrow-downward"
               label="Income"
-              value={formatAmount(monthlyTotals.income, settings.currency)}
+              value={formatAmount(monthlyTotals.income, layerCurrency)}
               color={Colors.income}
               bg={Colors.incomeLight}
             />
@@ -405,7 +436,7 @@ export default function HomeScreen({ navigation }) {
             <StatPill
               icon="arrow-upward"
               label="Expenses"
-              value={formatAmount(monthlyTotals.expense, settings.currency)}
+              value={formatAmount(monthlyTotals.expense, layerCurrency)}
               color={Colors.accent}
               bg={Colors.expenseLight}
             />
@@ -425,7 +456,7 @@ export default function HomeScreen({ navigation }) {
                 </Text>
               </View>
               <Text style={styles.budgetFigure}>
-                {formatAmount(monthlyTotals.expense, settings.currency)} / {formatAmount(settings.monthlyBudget, settings.currency)}
+                {formatAmount(monthlyTotals.expense, layerCurrency)} / {formatAmount(layerBudget, layerCurrency)}
               </Text>
             </View>
             <View style={styles.budgetTrack}>
@@ -448,7 +479,7 @@ export default function HomeScreen({ navigation }) {
 
         {/* Category breakdown (animated toggle) */}
         {showBreakdown && (
-          <CategoryBreakdown transactions={filterByMonth(transactions, selectedMonth)} currency={settings.currency} />
+          <CategoryBreakdown transactions={filterByMonth(transactions, selectedMonth)} currency={layerCurrency} />
         )}
 
         {/* Quick Actions */}
@@ -524,7 +555,7 @@ export default function HomeScreen({ navigation }) {
             <TransactionCard
               key={item.id}
               item={item}
-              currency={settings.currency}
+              currency={layerCurrency}
               onPress={(t) => navigation.navigate('TransactionDetail', { transaction: t })}
               onDelete={handleDelete}
             />
@@ -552,7 +583,9 @@ const get_styles = (Colors) => StyleSheet.create({
     elevation: 4,
   },
   headerLogo: { width: 40, height: 45, borderRadius: 10 },
-  headerTitle: { fontFamily: Typography.bold, fontSize: 22, color: Colors.textPrimary },
+  headerLayerIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontFamily: Typography.bold, fontSize: 18, color: Colors.textPrimary, maxWidth: 160 },
+  headerSubtitle: { fontFamily: Typography.regular, fontSize: 10, color: Colors.textMuted, marginTop: 1 },
   headerActions: { flexDirection: 'row', gap: 8 },
   headerBtn: {
     width: 38, height: 38, borderRadius: 19,

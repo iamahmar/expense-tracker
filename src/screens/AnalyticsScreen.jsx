@@ -11,6 +11,7 @@ import {
   getCategoryById, CATEGORIES, Animation,
 } from '../theme';
 import { useApp } from '../context/AppContext';
+import { useLayers } from '../context/LayerContext';
 import {
   filterByMonth, getCategoryTotals, getDailyTotals,
   formatAmount, formatMonthYear,
@@ -365,7 +366,17 @@ export default function AnalyticsScreen() {
   const sh = useMemo(() => get_sh(Colors), [Colors]);
   const s = useMemo(() => get_s(Colors), [Colors]);
 
-  const { transactions, settings } = useApp();
+  const { allTransactions, settings } = useApp();
+  const { activeLayer } = useLayers();
+
+  // Scope transactions to active layer
+  const transactions = useMemo(() => {
+    if (!activeLayer) return allTransactions;
+    return allTransactions.filter(t => t.layerId === activeLayer.id || (!t.layerId && activeLayer.id === 'layer_default'));
+  }, [allTransactions, activeLayer]);
+
+  const layerCurrency = activeLayer?.currency ?? settings.currency;
+
   const [selectedMonth, setSelectedMonth] = useState(new Date());
 
   const monthTxns = useMemo(() =>
@@ -427,7 +438,7 @@ export default function AnalyticsScreen() {
         icon: 'trending-up',
         color: top.cat.color,
         title: `${top.cat.label} is your top expense`,
-        body: `${top.pct.toFixed(0)}% of this month's spending — ${formatAmount(top.amount, settings.currency)}`,
+        body: `${top.pct.toFixed(0)}% of this month's spending — ${formatAmount(top.amount, layerCurrency)}`,
       });
     }
     if (totalIncome > 0 && totalExpense > totalIncome) {
@@ -435,7 +446,7 @@ export default function AnalyticsScreen() {
         icon: 'warning',
         color: Colors.warning,
         title: 'Spending exceeds income',
-        body: `You've spent ${formatAmount(totalExpense - totalIncome, settings.currency)} more than you earned this month.`,
+        body: `You've spent ${formatAmount(totalExpense - totalIncome, layerCurrency)} more than you earned this month.`,
       });
     } else if (totalIncome > 0) {
       const saved = totalIncome - totalExpense;
@@ -443,14 +454,14 @@ export default function AnalyticsScreen() {
         icon: 'savings',
         color: Colors.success,
         title: 'Great job saving!',
-        body: `You've kept ${formatAmount(saved, settings.currency)} (${((saved / totalIncome) * 100).toFixed(0)}% of income) this month.`,
+        body: `You've kept ${formatAmount(saved, layerCurrency)} (${((saved / totalIncome) * 100).toFixed(0)}% of income) this month.`,
       });
     }
     if (avgDaily > 0) {
       list.push({
         icon: 'today',
         color: Colors.info,
-        title: `${formatAmount(avgDaily, settings.currency)}/day average`,
+        title: `${formatAmount(avgDaily, layerCurrency)}/day average`,
         body: `Across ${txnCount} expense transaction${txnCount !== 1 ? 's' : ''} this month.`,
       });
     }
@@ -483,10 +494,14 @@ export default function AnalyticsScreen() {
       <View style={s.header}>
         <View>
           <Text style={s.title}>Analytics</Text>
-          <Text style={s.subtitle}>Your spending at a glance</Text>
+          <Text style={s.subtitle}>
+            {activeLayer ? activeLayer.name : 'Your spending at a glance'}
+          </Text>
         </View>
         <View style={s.headerBadge}>
-          <MaterialIcons name="insights" size={16} color={Colors.accent} />
+          {activeLayer && (
+            <MaterialIcons name={activeLayer.icon} size={14} color={Colors.accent} />
+          )}
           <Text style={s.headerBadgeTxt}>{monthTxns.length} txns</Text>
         </View>
       </View>
@@ -505,7 +520,7 @@ export default function AnalyticsScreen() {
           icon="arrow-upward"
           label="Expenses"
           value={totalExpense}
-          currency={settings.currency}
+          currency={layerCurrency}
           color={Colors.accent}
           bg={Colors.expenseLight}
           index={0}
@@ -515,7 +530,7 @@ export default function AnalyticsScreen() {
           icon="arrow-downward"
           label="Income"
           value={totalIncome}
-          currency={settings.currency}
+          currency={layerCurrency}
           color={Colors.income}
           bg={Colors.incomeLight}
           index={1}
@@ -568,7 +583,7 @@ export default function AnalyticsScreen() {
             </View>
             <View style={s.totalRow}>
               <Text style={s.totalLbl}>Total spent</Text>
-              <Text style={s.totalAmt}>{formatAmount(totalExpense, settings.currency)}</Text>
+              <Text style={s.totalAmt}>{formatAmount(totalExpense, layerCurrency)}</Text>
             </View>
           </>
         )}
@@ -585,7 +600,7 @@ export default function AnalyticsScreen() {
               amount={amount}
               pct={pct}
               rank={i + 1}
-              currency={settings.currency}
+              currency={layerCurrency}
               index={i}
             />
           ))}
@@ -610,7 +625,7 @@ export default function AnalyticsScreen() {
             showValuesOnTopOfBars
             fromZero
             withInnerLines
-            yAxisLabel={settings.currency}
+            yAxisLabel={layerCurrency}
             yAxisSuffix=""
             flatColor
           />
@@ -642,11 +657,11 @@ export default function AnalyticsScreen() {
             </View>
             <View style={s.savingsDivider} />
             <View style={s.savingsRight}>
-              <SavingsStat label="Earned" value={formatAmount(totalIncome, settings.currency)}   color={Colors.income} />
-              <SavingsStat label="Spent"  value={formatAmount(totalExpense, settings.currency)}  color={Colors.accent} />
+              <SavingsStat label="Earned" value={formatAmount(totalIncome, layerCurrency)}   color={Colors.income} />
+              <SavingsStat label="Spent"  value={formatAmount(totalExpense, layerCurrency)}  color={Colors.accent} />
               <SavingsStat
                 label="Saved"
-                value={formatAmount(Math.max(0, totalIncome - totalExpense), settings.currency)}
+                value={formatAmount(Math.max(0, totalIncome - totalExpense), layerCurrency)}
                 color={Colors.success}
               />
             </View>

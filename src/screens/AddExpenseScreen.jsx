@@ -8,6 +8,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme, Typography, Spacing, Radius, Shadow, CATEGORIES, getCategoryById } from '../theme';
 import { useApp } from '../context/AppContext';
+import { useLayers } from '../context/LayerContext';
 import { generateId } from '../utils/storage';
 import { formatAmountFull } from '../utils/helpers';
 
@@ -16,6 +17,10 @@ export default function AddExpenseScreen({ navigation, route }) {
   const styles = useMemo(() => get_styles(Colors), [Colors]);
 
   const { addTransaction, updateTransaction, settings } = useApp();
+  const { activeLayer } = useLayers();
+
+  // Use active layer currency, fall back to global settings
+  const layerCurrency = activeLayer?.currency ?? settings.currency;
 
   const editTxn = route.params?.transaction;
 
@@ -43,6 +48,7 @@ export default function AddExpenseScreen({ navigation, route }) {
     try {
       const txnData = {
         id: editTxn ? editTxn.id : generateId(),
+        layerId: editTxn ? editTxn.layerId : (activeLayer?.id ?? 'layer_default'),
         type,
         amount: parseFloat(amount),
         title: title.trim(),
@@ -100,7 +106,7 @@ export default function AddExpenseScreen({ navigation, route }) {
 
         {/* Amount Display */}
         <View style={styles.amountCard}>
-          <Text style={styles.currencySymbol}>{settings.currency}</Text>
+          <Text style={styles.currencySymbol}>{layerCurrency}</Text>
           <TextInput
             style={styles.amountInput}
             value={amount}

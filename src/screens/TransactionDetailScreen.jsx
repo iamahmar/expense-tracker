@@ -7,6 +7,7 @@ import {
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme, Typography, Spacing, Radius, Shadow, getCategoryById } from '../theme';
 import { useApp } from '../context/AppContext';
+import { useLayers } from '../context/LayerContext';
 import { formatAmountFull, formatDate } from '../utils/helpers';
 
 export default function TransactionDetailScreen({ route, navigation }) {
@@ -14,10 +15,14 @@ export default function TransactionDetailScreen({ route, navigation }) {
   const styles = useMemo(() => get_styles(Colors), [Colors]);
 
   const routeTxn = route.params.transaction;
-  const { transactions, deleteTransaction, settings } = useApp();
+  const { allTransactions, deleteTransaction, settings } = useApp();
+  const { activeLayer } = useLayers();
 
   // Find live transaction so it updates automatically when edited
-  const transaction = transactions.find(t => t.id === routeTxn.id) || routeTxn;
+  const transaction = allTransactions.find(t => t.id === routeTxn.id) || routeTxn;
+
+  // Use layer-specific currency if the txn belongs to a layer
+  const layerCurrency = activeLayer?.currency ?? settings.currency;
 
   const cat      = getCategoryById(transaction.category);
   const isIncome = transaction.type === 'income';
@@ -59,7 +64,7 @@ export default function TransactionDetailScreen({ route, navigation }) {
             <MaterialIcons name={cat.icon} size={36} color={cat.color} />
           </View>
           <Text style={[styles.heroAmount, { color: isIncome ? Colors.income : Colors.accent }]}>
-            {isIncome ? '+' : '-'}{formatAmountFull(transaction.amount, settings.currency)}
+            {isIncome ? '+' : '-'}{formatAmountFull(transaction.amount, layerCurrency)}
           </Text>
           <View style={[styles.typeBadge, { backgroundColor: isIncome ? Colors.incomeLight : Colors.expenseLight }]}>
             <Text style={[styles.typeBadgeText, { color: isIncome ? Colors.income : Colors.accent }]}>

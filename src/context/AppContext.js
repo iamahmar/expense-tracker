@@ -1,4 +1,4 @@
-// context/AppContext.js — Global state with AsyncStorage sync
+// context/AppContext.js — Global state with AsyncStorage sync + layer-scoping
 import React, { createContext, useContext, useEffect, useReducer, useCallback } from 'react';
 import {
   loadTransactions,
@@ -13,7 +13,7 @@ import {
 const AppContext = createContext(null);
 
 const initialState = {
-  transactions: [],
+  allTransactions: [],   // entire transaction store across all layers
   settings: {
     monthlyBudget: 50000,
     currency: '₹',
@@ -26,9 +26,14 @@ const initialState = {
 function reducer(state, action) {
   switch (action.type) {
     case 'INIT':
-      return { ...state, transactions: action.transactions, settings: action.settings, loading: false };
+      return {
+        ...state,
+        allTransactions: action.transactions,
+        settings: action.settings,
+        loading: false,
+      };
     case 'SET_TRANSACTIONS':
-      return { ...state, transactions: action.transactions };
+      return { ...state, allTransactions: action.transactions };
     case 'SET_SETTINGS':
       return { ...state, settings: { ...state.settings, ...action.settings } };
     default:
@@ -76,14 +81,26 @@ export function AppProvider({ children }) {
     dispatch({ type: 'INIT', transactions: [], settings: initialState.settings });
   }, []);
 
+  // Notify context when layer transactions are removed externally
+  const refreshTransactions = useCallback(async () => {
+    const transactions = await loadTransactions();
+    dispatch({ type: 'SET_TRANSACTIONS', transactions });
+  }, []);
+
   return (
     <AppContext.Provider value={{
-      ...state,
+      allTransactions: state.allTransactions,
+      // Backwards-compat alias — components that use `transactions` still work
+      // (they'll get all transactions; filtering by layerId happens at screen level)
+      transactions: state.allTransactions,
+      settings: state.settings,
+      loading: state.loading,
       addTransaction,
       deleteTransaction,
       updateTransaction,
       updateSettings,
       clearData,
+      refreshTransactions,
     }}>
       {children}
     </AppContext.Provider>

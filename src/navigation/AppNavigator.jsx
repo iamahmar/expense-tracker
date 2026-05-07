@@ -1,5 +1,5 @@
 // navigation/AppNavigator.jsx
-import React, {  useRef, useEffect, useCallback , useMemo } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, StyleSheet, Platform,
   Animated, Pressable, Dimensions,
@@ -19,7 +19,9 @@ import AddExpenseScreen from '../screens/AddExpenseScreen';
 import AnalyticsScreen from '../screens/AnalyticsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import TransactionDetailScreen from '../screens/TransactionDetailScreen';
-import { AppProvider } from '../context/AppContext';
+import LayersScreen from '../screens/LayersScreen';
+import CreateLayerScreen from '../screens/CreateLayerScreen';
+import { useLayers } from '../context/LayerContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -45,26 +47,30 @@ const get_MODAL_OPTIONS = (Colors) => ({
 
 // ─── Tab definitions ──────────────────────────────────────────────────────────
 const TABS = [
-  { name: 'Home', icon: 'home', iconFocused: 'home', label: 'Home' },
-  { name: 'Analytics', icon: 'bar-chart', iconFocused: 'bar-chart', label: 'Analytics' },
-  { name: 'Add', icon: 'add', iconFocused: 'add', label: null }, // FAB — no label
-  { name: 'Settings', icon: 'settings', iconFocused: 'tune', label: 'Settings' },
+  { name: 'Home',      icon: 'home',              iconFocused: 'home',              label: 'Home'      },
+  { name: 'Analytics', icon: 'bar-chart',          iconFocused: 'bar-chart',          label: 'Analytics' },
+  { name: 'Layers',    icon: 'layers',             iconFocused: 'layers',             label: 'Layers'    },
+  { name: 'Settings',  icon: 'settings',           iconFocused: 'tune',               label: 'Settings'  },
 ];
 
 // ─── Animated Tab Button ──────────────────────────────────────────────────────
 function TabButton({ tab, focused, onPress, onLongPress }) {
   const Colors = useTheme();
+  const { activeLayer } = useLayers();
   const styles = useMemo(() => get_styles(Colors), [Colors]);
 
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const scaleAnim   = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(focused ? 1 : 0.5)).current;
-  const bgAnim = useRef(new Animated.Value(focused ? 1 : 0)).current;
-  const dotAnim = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const bgAnim      = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const dotAnim     = useRef(new Animated.Value(focused ? 1 : 0)).current;
+
+  // Active layer color for the Layers tab indicator
+  const layerColor = activeLayer?.color ?? Colors.accent;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.spring(bgAnim, { toValue: focused ? 1 : 0, ...Animation.springSnappy }),
-      Animated.spring(dotAnim, { toValue: focused ? 1 : 0, ...Animation.springBouncy }),
+      Animated.spring(bgAnim,      { toValue: focused ? 1 : 0, ...Animation.springSnappy }),
+      Animated.spring(dotAnim,     { toValue: focused ? 1 : 0, ...Animation.springBouncy }),
       Animated.timing(opacityAnim, { toValue: focused ? 1 : 0.45, duration: Animation.base, useNativeDriver: true }),
     ]).start();
   }, [focused]);
@@ -77,25 +83,16 @@ function TabButton({ tab, focused, onPress, onLongPress }) {
     onPress();
   };
 
-  // ── FAB (centre button) ──
-  if (tab.name === 'Add') {
-    return (
-      <Pressable onPress={handlePress} onLongPress={onLongPress} style={styles.fabWrap}>
-        <Animated.View style={[styles.fab, { transform: [{ scale: scaleAnim }] }]}>
-          <MaterialIcons name="add" size={28} color="#fff" />
-        </Animated.View>
-      </Pressable>
-    );
-  }
-
-  // ── Regular tab ──
   const bgColor = bgAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['rgba(255,107,53,0)', Colors.accentMuted],
   });
 
-  const dotScale = dotAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+  const dotScale   = dotAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
   const dotOpacity = dotAnim;
+
+  // Layers tab: show active layer color dot
+  const isLayersTab = tab.name === 'Layers';
 
   return (
     <Pressable onPress={handlePress} onLongPress={onLongPress} style={styles.tabBtnOuter}>
@@ -105,11 +102,21 @@ function TabButton({ tab, focused, onPress, onLongPress }) {
 
         {/* Icon */}
         <Animated.View style={{ opacity: opacityAnim }}>
-          <MaterialIcons
-            name={focused ? tab.iconFocused : tab.icon}
-            size={22}
-            color={focused ? Colors.tabActive : Colors.tabInactive}
-          />
+          {isLayersTab && activeLayer ? (
+            <View style={[styles.layerIconDot, { backgroundColor: layerColor + '33' }]}>
+              <MaterialIcons
+                name={activeLayer.icon}
+                size={18}
+                color={focused ? layerColor : Colors.tabInactive}
+              />
+            </View>
+          ) : (
+            <MaterialIcons
+              name={focused ? tab.iconFocused : tab.icon}
+              size={22}
+              color={focused ? Colors.tabActive : Colors.tabInactive}
+            />
+          )}
         </Animated.View>
 
         {/* Label */}
@@ -117,17 +124,21 @@ function TabButton({ tab, focused, onPress, onLongPress }) {
           <Animated.Text
             style={[
               styles.tabLabel,
-              { color: focused ? Colors.tabActive : Colors.tabInactive, opacity: opacityAnim },
+              { color: focused ? (isLayersTab && activeLayer ? layerColor : Colors.tabActive) : Colors.tabInactive, opacity: opacityAnim },
             ]}
           >
-            {tab.label}
+            {isLayersTab && activeLayer ? activeLayer.name.split(' ')[0] : tab.label}
           </Animated.Text>
         )}
 
         {/* Active indicator dot */}
         <Animated.View style={[
           styles.activeDot,
-          { transform: [{ scale: dotScale }], opacity: dotOpacity },
+          {
+            transform: [{ scale: dotScale }],
+            opacity: dotOpacity,
+            backgroundColor: isLayersTab && activeLayer ? layerColor : Colors.accent,
+          },
         ]} />
       </Animated.View>
     </Pressable>
@@ -149,7 +160,7 @@ function CustomTabBar({ state, descriptors, navigation }) {
 
         <View style={styles.tabBarRow}>
           {state.routes.map((route, index) => {
-            const tab = TABS.find(t => t.name === route.name) || TABS[0];
+            const tab    = TABS.find(t => t.name === route.name) || TABS[0];
             const focused = state.index === index;
             const { options } = descriptors[route.key];
 
@@ -182,8 +193,6 @@ function CustomTabBar({ state, descriptors, navigation }) {
 // ─── Stacks ───────────────────────────────────────────────────────────────────
 function HomeStack() {
   const Colors = useTheme();
-  const styles = useMemo(() => get_styles(Colors), [Colors]);
-
   return (
     <Stack.Navigator screenOptions={get_SLIDE_OPTIONS(Colors)}>
       <Stack.Screen name="HomeMain" component={HomeScreen} />
@@ -194,8 +203,6 @@ function HomeStack() {
 
 function AnalyticsStack() {
   const Colors = useTheme();
-  const styles = useMemo(() => get_styles(Colors), [Colors]);
-
   return (
     <Stack.Navigator screenOptions={get_SLIDE_OPTIONS(Colors)}>
       <Stack.Screen name="AnalyticsMain" component={AnalyticsScreen} />
@@ -203,10 +210,17 @@ function AnalyticsStack() {
   );
 }
 
+function LayersStack() {
+  const Colors = useTheme();
+  return (
+    <Stack.Navigator screenOptions={get_SLIDE_OPTIONS(Colors)}>
+      <Stack.Screen name="LayersMain" component={LayersScreen} />
+    </Stack.Navigator>
+  );
+}
+
 function SettingsStack() {
   const Colors = useTheme();
-  const styles = useMemo(() => get_styles(Colors), [Colors]);
-
   return (
     <Stack.Navigator screenOptions={get_SLIDE_OPTIONS(Colors)}>
       <Stack.Screen name="SettingsMain" component={SettingsScreen} />
@@ -216,9 +230,6 @@ function SettingsStack() {
 
 // ─── Tab Navigator ────────────────────────────────────────────────────────────
 function TabNavigator() {
-  const Colors = useTheme();
-  const styles = useMemo(() => get_styles(Colors), [Colors]);
-
   return (
     <Tab.Navigator
       tabBar={(props) => <CustomTabBar {...props} />}
@@ -227,10 +238,10 @@ function TabNavigator() {
         tabBarHideOnKeyboard: true,
       }}
     >
-      <Tab.Screen name="Home" component={HomeStack} />
+      <Tab.Screen name="Home"      component={HomeStack}      />
       <Tab.Screen name="Analytics" component={AnalyticsStack} />
-      {/* <Tab.Screen name="History" component={HomeStack} /> */}
-      <Tab.Screen name="Settings" component={SettingsStack} />
+      <Tab.Screen name="Layers"    component={LayersStack}    />
+      <Tab.Screen name="Settings"  component={SettingsStack}  />
     </Tab.Navigator>
   );
 }
@@ -238,14 +249,17 @@ function TabNavigator() {
 // ─── Root Navigator ───────────────────────────────────────────────────────────
 function RootNavigator() {
   const Colors = useTheme();
-  const styles = useMemo(() => get_styles(Colors), [Colors]);
-
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="Main" component={TabNavigator} />
       <Stack.Screen
         name="AddExpenseModal"
         component={AddExpenseScreen}
+        options={get_MODAL_OPTIONS(Colors)}
+      />
+      <Stack.Screen
+        name="CreateLayerModal"
+        component={CreateLayerScreen}
         options={get_MODAL_OPTIONS(Colors)}
       />
     </Stack.Navigator>
@@ -267,10 +281,6 @@ export default function AppNavigator() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const TAB_HEIGHT_IOS = 82;
-const TAB_HEIGHT_ANDROID = 68;
-const TAB_HEIGHT = Platform.OS === 'ios' ? TAB_HEIGHT_IOS : TAB_HEIGHT_ANDROID;
-
 const get_styles = (Colors, insets = { bottom: 0 }) => StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.bg },
 
@@ -278,7 +288,6 @@ const get_styles = (Colors, insets = { bottom: 0 }) => StyleSheet.create({
   tabBarOuter: {
     position: 'absolute',
     bottom: 0, left: 0, right: 0,
-    // Safe-area padding
     paddingBottom: insets.bottom > 0 ? insets.bottom : (Platform.OS === 'ios' ? 24 : 12),
     backgroundColor: 'transparent',
   },
@@ -293,7 +302,6 @@ const get_styles = (Colors, insets = { bottom: 0 }) => StyleSheet.create({
     ...Shadow.lg,
   },
 
-  // Thin accent line along the top of the bar
   tabBarAccentLine: {
     height: 1,
     marginHorizontal: 24,
@@ -341,23 +349,9 @@ const get_styles = (Colors, insets = { bottom: 0 }) => StyleSheet.create({
     backgroundColor: Colors.accent,
   },
 
-  // ── FAB (centre) ──
-  fabWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fab: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
-    backgroundColor: Colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Platform.OS === 'ios' ? 2 : 0,
-    ...Shadow.accent,
-    // Subtle inner highlight
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+  // Layers tab — mini icon with layer color bg
+  layerIconDot: {
+    width: 30, height: 30, borderRadius: 9,
+    alignItems: 'center', justifyContent: 'center',
   },
 });
