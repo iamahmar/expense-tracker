@@ -57,7 +57,6 @@ export default function LayersScreen({ navigation }) {
       {layers.map(layer => {
         const isActive = layer.id === activeLayer?.id;
         const spent = spentByLayer[layer.id] ?? 0;
-        const pct = layer.monthlyBudget ? Math.min((spent / layer.monthlyBudget) * 100, 100) : 0;
 
         return (
           <TouchableOpacity
@@ -73,7 +72,7 @@ export default function LayersScreen({ navigation }) {
               <View style={styles.cardInfo}>
                 <Text style={styles.cardName}>{layer.name}</Text>
                 <Text style={styles.cardBudget}>
-                  {formatAmount(spent, layer.currency)} of {formatAmount(layer.monthlyBudget, layer.currency)}
+                  {formatAmount(spent, layer.currency)} spent this month
                 </Text>
               </View>
               {isActive && (
@@ -81,10 +80,6 @@ export default function LayersScreen({ navigation }) {
                   <MaterialIcons name="check" size={14} color="#fff" />
                 </View>
               )}
-            </View>
-
-            <View style={styles.barTrack}>
-              <View style={[styles.barFill, { width: `${pct}%`, backgroundColor: layer.color }]} />
             </View>
 
             <View style={styles.cardActions}>

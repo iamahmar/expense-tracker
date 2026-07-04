@@ -15,7 +15,6 @@ const AppContext = createContext(null);
 const initialState = {
   allTransactions: [],   // entire transaction store across all layers
   settings: {
-    monthlyBudget: 50000,
     currency: '₹',
     currencyCode: 'INR',
     theme: 'dark',

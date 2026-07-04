@@ -10,6 +10,8 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme, Typography, Spacing, Radius, Shadow, getCategoryById } from '../theme';
 import { useApp } from '../context/AppContext';
 import { useLayers } from '../context/LayerContext';
+import { useCategoryBudgets } from '../context/CategoryBudgetContext';
+import { getBudgetStats } from '../utils/budgetPeriods';
 import {
   formatAmount, formatAmountFull, formatDate,
   filterByMonth, isThisWeek, isThisMonth,
@@ -280,6 +282,7 @@ export default function HomeScreen({ navigation }) {
 
   const { allTransactions, settings, loading, deleteTransaction } = useApp();
   const { activeLayer, layersLoading } = useLayers();
+  const { budgets } = useCategoryBudgets();
 
   // Scope transactions to the active layer
   const transactions = useMemo(() => {
@@ -289,7 +292,6 @@ export default function HomeScreen({ navigation }) {
 
   // Layer-specific settings override global
   const layerCurrency = activeLayer?.currency ?? settings.currency;
-  const layerBudget   = activeLayer?.monthlyBudget ?? settings.monthlyBudget;
 
   const [filter, setFilter] = useState('This Month');
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -314,9 +316,38 @@ export default function HomeScreen({ navigation }) {
     return { income, expense, net: income - expense };
   }, [transactions, selectedMonth]);
 
-  const budgetUsed    = layerBudget ? (monthlyTotals.expense / layerBudget) * 100 : 0;
-  const budgetExceeded = monthlyTotals.expense > layerBudget;
   const isPositiveNet  = monthlyTotals.net >= 0;
+
+  // Category-budget summary for the active layer (drives the hero budget strip).
+  const budgetSummary = useMemo(() => {
+    const layerBudgets = activeLayer
+      ? budgets.filter(b => b.layerId === activeLayer.id || (!b.layerId && activeLayer.id === 'layer_default'))
+      : budgets;
+    if (layerBudgets.length === 0) {
+      return { count: 0, allocated: 0, spent: 0, pct: 0, over: 0, risk: 0 };
+    }
+    let allocated = 0, spent = 0, over = 0, risk = 0;
+    layerBudgets.forEach(b => {
+      const st = getBudgetStats(b, transactions);
+      allocated += st.amount;
+      spent += st.spent;
+      if (st.over) over++;
+      else if (st.pct >= 80 || st.predictedOverspend) risk++;
+    });
+    return {
+      count: layerBudgets.length,
+      allocated, spent, over, risk,
+      pct: allocated > 0 ? (spent / allocated) * 100 : 0,
+    };
+  }, [budgets, activeLayer, transactions]);
+
+  // "Remaining" = leftover budget (allocated − spent) when category budgets are
+  // set up for this layer; falls back to net income − expense otherwise, since
+  // without budgets there's nothing to be "remaining" from.
+  const remaining = budgetSummary.count > 0
+    ? budgetSummary.allocated - budgetSummary.spent
+    : monthlyTotals.net;
+  const isPositiveRemaining = remaining >= 0;
 
   // Animated header compression on scroll
   const headerBg = scrollY.interpolate({ inputRange: [0, 60], outputRange: ['transparent', Colors.bg], extrapolate: 'clamp' });
@@ -423,7 +454,7 @@ export default function HomeScreen({ navigation }) {
             </View>
           </View>
 
-          {/* Income / Expense pills */}
+          {/* Income / Expense / Remaining pills */}
           <View style={styles.pillRow}>
             <StatPill
               icon="arrow-downward"
@@ -432,7 +463,7 @@ export default function HomeScreen({ navigation }) {
               color={Colors.income}
               bg={Colors.incomeLight}
             />
-            <View style={{ width: 10 }} />
+            <View style={{ width: 8 }} />
             <StatPill
               icon="arrow-upward"
               label="Expenses"
@@ -440,29 +471,64 @@ export default function HomeScreen({ navigation }) {
               color={Colors.accent}
               bg={Colors.expenseLight}
             />
+            <View style={{ width: 8 }} />
+            <StatPill
+              icon="account-balance-wallet"
+              label="Remaining"
+              value={formatAmount(remaining, layerCurrency)}
+              color={isPositiveRemaining ? Colors.income : Colors.danger}
+              bg={isPositiveRemaining ? Colors.incomeLight : Colors.dangerLight}
+            />
           </View>
 
-          {/* Budget progress */}
-          <View style={styles.budgetSection}>
-            <View style={styles.budgetRow}>
-              <View style={styles.budgetLeft}>
-                <MaterialIcons
-                  name={budgetExceeded ? 'warning-amber' : 'account-balance-wallet'}
-                  size={14}
-                  color={budgetExceeded ? Colors.warning : Colors.textSecondary}
-                />
-                <Text style={[styles.budgetLabel, budgetExceeded && { color: Colors.warning }]}>
-                  {budgetExceeded ? 'Budget exceeded!' : `Budget — ${Math.round(budgetUsed)}% used`}
-                </Text>
+          {/* Category budget strip */}
+          {budgetSummary.count > 0 ? (
+            <TouchableOpacity
+              style={styles.budgetStrip}
+              onPress={() => navigation.navigate('Budgets')}
+              activeOpacity={0.8}
+            >
+              <View style={styles.budgetStripTop}>
+                <View style={styles.budgetStripLeft}>
+                  <MaterialIcons
+                    name={budgetSummary.over > 0 ? 'error' : budgetSummary.risk > 0 ? 'warning-amber' : 'pie-chart'}
+                    size={14}
+                    color={budgetSummary.over > 0 ? Colors.danger : budgetSummary.risk > 0 ? Colors.warning : Colors.accent}
+                  />
+                  <Text style={styles.budgetStripLabel}>
+                    {budgetSummary.over > 0
+                      ? `${budgetSummary.over} budget${budgetSummary.over > 1 ? 's' : ''} over`
+                      : budgetSummary.risk > 0
+                        ? `${budgetSummary.risk} budget${budgetSummary.risk > 1 ? 's' : ''} at risk`
+                        : `${budgetSummary.count} budget${budgetSummary.count > 1 ? 's' : ''} on track`}
+                  </Text>
+                </View>
+                <View style={styles.budgetStripRight}>
+                  <Text style={styles.budgetStripFigure}>
+                    {formatAmount(budgetSummary.spent, layerCurrency)} / {formatAmount(budgetSummary.allocated, layerCurrency)}
+                  </Text>
+                  <MaterialIcons name="chevron-right" size={16} color={Colors.textMuted} />
+                </View>
               </View>
-              <Text style={styles.budgetFigure}>
-                {formatAmount(monthlyTotals.expense, layerCurrency)} / {formatAmount(layerBudget, layerCurrency)}
-              </Text>
-            </View>
-            <View style={styles.budgetTrack}>
-              <SparkBar value={Math.min(budgetUsed, 100)} max={100} color={budgetExceeded ? Colors.warning : Colors.accent} />
-            </View>
-          </View>
+              <View style={styles.budgetTrack}>
+                <SparkBar
+                  value={Math.min(budgetSummary.pct, 100)}
+                  max={100}
+                  color={budgetSummary.over > 0 ? Colors.danger : budgetSummary.risk > 0 ? Colors.warning : Colors.accent}
+                />
+              </View>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={styles.budgetPrompt}
+              onPress={() => navigation.navigate('Budgets')}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="add-chart" size={16} color={Colors.accent} />
+              <Text style={styles.budgetPromptText}>Set category budgets</Text>
+              <MaterialIcons name="chevron-right" size={16} color={Colors.accent} />
+            </TouchableOpacity>
+          )}
 
           {/* Breakdown toggle */}
           <TouchableOpacity style={styles.breakdownToggle} onPress={toggleBreakdown} activeOpacity={0.7}>
@@ -486,8 +552,8 @@ export default function HomeScreen({ navigation }) {
         <View style={styles.quickActions}>
           {[
             { icon: 'add-circle-outline', label: 'Add', screen: 'AddExpenseModal', color: Colors.accent },
+            { icon: 'pie-chart', label: 'Budgets', screen: 'Budgets', color: '#F5A623' },
             { icon: 'bar-chart', label: 'Analytics', screen: 'Analytics', color: '#A78BFA' },
-            // { icon: 'receipt-long', label: 'History', screen: 'History', color: '#34D399' },
             { icon: 'settings', label: 'Settings', screen: 'Settings', color: Colors.textSecondary },
           ].map(({ icon, label, screen, color }) => (
             <TouchableOpacity
@@ -618,6 +684,23 @@ const get_styles = (Colors) => StyleSheet.create({
   budgetLabel: { fontFamily: Typography.medium, fontSize: 12, color: Colors.textSecondary },
   budgetFigure: { fontFamily: Typography.mono, fontSize: 12, color: Colors.textMuted },
   budgetTrack: { flexDirection: 'row' },
+
+  // Category budget strip
+  budgetStrip: {
+    marginTop: Spacing.md, paddingTop: Spacing.md,
+    borderTopWidth: 1, borderColor: Colors.divider, gap: 8,
+  },
+  budgetStripTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  budgetStripLeft: { flexDirection: 'row', alignItems: 'center', gap: 5, flexShrink: 1 },
+  budgetStripLabel: { fontFamily: Typography.medium, fontSize: 12, color: Colors.textSecondary },
+  budgetStripRight: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  budgetStripFigure: { fontFamily: Typography.mono, fontSize: 12, color: Colors.textMuted },
+  budgetPrompt: {
+    marginTop: Spacing.md, paddingTop: Spacing.md,
+    borderTopWidth: 1, borderColor: Colors.divider,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+  },
+  budgetPromptText: { fontFamily: Typography.medium, fontSize: 13, color: Colors.accent },
 
   breakdownToggle: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',

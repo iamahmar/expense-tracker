@@ -2,13 +2,15 @@
 export const formatAmount = (amount, currency = '₹') => {
   const num = parseFloat(amount);
   if (isNaN(num)) return `${currency}0`;
+  const sign = num < 0 ? '-' : '';
+  const abs = Math.abs(num);
   // Indian lakh/crore formatting for INR
   if (currency === '₹') {
-    if (num >= 10000000) return `${currency}${(num / 10000000).toFixed(1)}Cr`;
-    if (num >= 100000)   return `${currency}${(num / 100000).toFixed(1)}L`;
-    if (num >= 1000)     return `${currency}${(num / 1000).toFixed(1)}K`;
+    if (abs >= 10000000) return `${sign}${currency}${(abs / 10000000).toFixed(1)}Cr`;
+    if (abs >= 100000)   return `${sign}${currency}${(abs / 100000).toFixed(1)}L`;
+    if (abs >= 1000)     return `${sign}${currency}${(abs / 1000).toFixed(1)}K`;
   }
-  return `${currency}${num.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+  return `${sign}${currency}${abs.toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 };
 
 export const formatAmountFull = (amount, currency = '₹') => {

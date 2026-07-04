@@ -6,6 +6,7 @@ const KEYS = {
   SETTINGS:      '@expense_tracker/settings',
   LAYERS:        '@expense_tracker/layers',
   ACTIVE_LAYER:  '@expense_tracker/active_layer',
+  CAT_BUDGETS:   '@expense_tracker/category_budgets',
 };
 
 // ─── Transactions ─────────────────────────────────────────────────────────────
@@ -64,7 +65,6 @@ export const deleteLayerTransactions = async (layerId) => {
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 const DEFAULT_SETTINGS = {
-  monthlyBudget: 50000,
   currency: '₹',
   currencyCode: 'INR',
 };
@@ -89,7 +89,57 @@ export const saveSettings = async (settings) => {
 export const clearAllData = async () => {
   await AsyncStorage.multiRemove([
     KEYS.TRANSACTIONS, KEYS.SETTINGS, KEYS.LAYERS, KEYS.ACTIVE_LAYER,
+    KEYS.CAT_BUDGETS,
   ]);
+};
+
+// ─── Category Budgets ───────────────────────────────────────────────────────────
+
+export const loadCategoryBudgets = async () => {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.CAT_BUDGETS);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    console.error('loadCategoryBudgets error:', e);
+    return [];
+  }
+};
+
+export const saveCategoryBudgets = async (budgets) => {
+  try {
+    await AsyncStorage.setItem(KEYS.CAT_BUDGETS, JSON.stringify(budgets));
+  } catch (e) {
+    console.error('saveCategoryBudgets error:', e);
+  }
+};
+
+export const addCategoryBudget = async (budget) => {
+  const existing = await loadCategoryBudgets();
+  const updated = [budget, ...existing];
+  await saveCategoryBudgets(updated);
+  return updated;
+};
+
+export const updateCategoryBudget = async (updatedBudget) => {
+  const existing = await loadCategoryBudgets();
+  const updated = existing.map(b => (b.id === updatedBudget.id ? updatedBudget : b));
+  await saveCategoryBudgets(updated);
+  return updated;
+};
+
+export const deleteCategoryBudget = async (id) => {
+  const existing = await loadCategoryBudgets();
+  const updated = existing.filter(b => b.id !== id);
+  await saveCategoryBudgets(updated);
+  return updated;
+};
+
+// Remove all category budgets belonging to a layer (called on layer delete).
+export const deleteLayerCategoryBudgets = async (layerId) => {
+  const existing = await loadCategoryBudgets();
+  const updated = existing.filter(b => b.layerId !== layerId);
+  await saveCategoryBudgets(updated);
+  return updated;
 };
 
 // ─── Layers ───────────────────────────────────────────────────────────────────
@@ -99,7 +149,6 @@ const DEFAULT_LAYER = {
   name: 'Personal',
   icon: 'account-balance-wallet',
   color: '#6366F1',
-  monthlyBudget: 50000,
   currency: '₹',
   currencyCode: 'INR',
   createdAt: new Date().toISOString(),

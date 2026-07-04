@@ -21,6 +21,8 @@ import SettingsScreen from '../screens/SettingsScreen';
 import TransactionDetailScreen from '../screens/TransactionDetailScreen';
 import LayersScreen from '../screens/LayersScreen';
 import CreateLayerScreen from '../screens/CreateLayerScreen';
+import CategoryBudgetsScreen from '../screens/CategoryBudgetsScreen';
+import CreateCategoryBudgetScreen from '../screens/CreateCategoryBudgetScreen';
 import { useLayers } from '../context/LayerContext';
 
 const Tab = createBottomTabNavigator();
@@ -49,6 +51,7 @@ const get_MODAL_OPTIONS = (Colors) => ({
 const TABS = [
   { name: 'Home',      icon: 'home',              iconFocused: 'home',              label: 'Home'      },
   { name: 'Analytics', icon: 'bar-chart',          iconFocused: 'bar-chart',          label: 'Analytics' },
+  { name: 'Budgets',   icon: 'pie-chart-outline',  iconFocused: 'pie-chart',          label: 'Budgets'   },
   { name: 'Layers',    icon: 'layers',             iconFocused: 'layers',             label: 'Layers'    },
   { name: 'Settings',  icon: 'settings',           iconFocused: 'tune',               label: 'Settings'  },
 ];
@@ -210,6 +213,15 @@ function AnalyticsStack() {
   );
 }
 
+function BudgetsStack() {
+  const Colors = useTheme();
+  return (
+    <Stack.Navigator screenOptions={get_SLIDE_OPTIONS(Colors)}>
+      <Stack.Screen name="BudgetsMain" component={CategoryBudgetsScreen} />
+    </Stack.Navigator>
+  );
+}
+
 function LayersStack() {
   const Colors = useTheme();
   return (
@@ -240,6 +252,7 @@ function TabNavigator() {
     >
       <Tab.Screen name="Home"      component={HomeStack}      />
       <Tab.Screen name="Analytics" component={AnalyticsStack} />
+      <Tab.Screen name="Budgets"   component={BudgetsStack}   />
       <Tab.Screen name="Layers"    component={LayersStack}    />
       <Tab.Screen name="Settings"  component={SettingsStack}  />
     </Tab.Navigator>
@@ -260,6 +273,11 @@ function RootNavigator() {
       <Stack.Screen
         name="CreateLayerModal"
         component={CreateLayerScreen}
+        options={get_MODAL_OPTIONS(Colors)}
+      />
+      <Stack.Screen
+        name="CreateCategoryBudgetModal"
+        component={CreateCategoryBudgetScreen}
         options={get_MODAL_OPTIONS(Colors)}
       />
     </Stack.Navigator>

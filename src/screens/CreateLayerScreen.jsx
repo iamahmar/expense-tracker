@@ -22,7 +22,6 @@ export default function CreateLayerScreen({ navigation, route }) {
   const [name, setName] = useState(editingLayer?.name ?? '');
   const [icon, setIcon] = useState(editingLayer?.icon ?? LAYER_ICONS[0]);
   const [color, setColor] = useState(editingLayer?.color ?? LAYER_COLORS[0]);
-  const [budget, setBudget] = useState(String(editingLayer?.monthlyBudget ?? settings.monthlyBudget));
   const [currency, setCurrency] = useState({
     symbol: editingLayer?.currency ?? settings.currency,
     code: editingLayer?.currencyCode ?? settings.currencyCode,
@@ -34,12 +33,6 @@ export default function CreateLayerScreen({ navigation, route }) {
       Alert.alert('Missing Name', 'Please enter a wallet name');
       return;
     }
-    const budgetVal = parseFloat(budget);
-    if (isNaN(budgetVal) || budgetVal <= 0) {
-      Alert.alert('Invalid Budget', 'Enter a positive number');
-      return;
-    }
-
     setSaving(true);
     try {
       const layerData = {
@@ -47,7 +40,6 @@ export default function CreateLayerScreen({ navigation, route }) {
         name: name.trim(),
         icon,
         color,
-        monthlyBudget: budgetVal,
         currency: currency.symbol,
         currencyCode: currency.code,
         createdAt: editingLayer ? editingLayer.createdAt : new Date().toISOString(),
@@ -129,23 +121,6 @@ export default function CreateLayerScreen({ navigation, route }) {
                 {color === c && <MaterialIcons name="check" size={16} color="#fff" />}
               </TouchableOpacity>
             ))}
-          </View>
-        </View>
-
-        {/* Budget */}
-        <View style={styles.formCard}>
-          <Text style={styles.fieldLabel}>Monthly Budget</Text>
-          <View style={styles.inputRow}>
-            <Text style={styles.currSymbol}>{currency.symbol}</Text>
-            <TextInput
-              style={styles.textInput}
-              value={budget}
-              onChangeText={setBudget}
-              keyboardType="decimal-pad"
-              placeholder="0"
-              placeholderTextColor={Colors.textMuted}
-              maxLength={10}
-            />
           </View>
         </View>
 

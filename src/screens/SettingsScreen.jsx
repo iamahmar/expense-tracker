@@ -88,7 +88,6 @@ export default function SettingsScreen({ navigation }) {
   const styles = useMemo(() => getStyles(Colors), [Colors]);
 
   // Layer-scoped settings (fall back to global if no active layer)
-  const layerBudget   = activeLayer?.monthlyBudget ?? settings.monthlyBudget;
   const layerCurrency = activeLayer?.currency ?? settings.currency;
   const layerCurrCode = activeLayer?.currencyCode ?? settings.currencyCode;
 
@@ -98,8 +97,6 @@ export default function SettingsScreen({ navigation }) {
     return allTransactions.filter(t => t.layerId === activeLayer.id || (!t.layerId && activeLayer.id === 'layer_default'));
   }, [allTransactions, activeLayer]);
 
-  const [budget, setBudget] = useState(String(layerBudget));
-  const [editingBudget, setEditingBudget] = useState(false);
   const [showCurrency, setShowCurrency] = useState(false);
 
   const totalExpense = transactions
@@ -109,23 +106,6 @@ export default function SettingsScreen({ navigation }) {
       return t.type === 'expense' && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
     })
     .reduce((s, t) => s + parseFloat(t.amount), 0);
-
-  const budgetPct = (totalExpense / layerBudget) * 100;
-  const exceeded  = totalExpense > layerBudget;
-
-  const saveBudget = async () => {
-    const val = parseFloat(budget);
-    if (isNaN(val) || val <= 0) {
-      Alert.alert('Invalid Budget', 'Enter a positive number');
-      return;
-    }
-    if (activeLayer) {
-      await editLayer({ ...activeLayer, monthlyBudget: val });
-    } else {
-      await updateSettings({ monthlyBudget: val });
-    }
-    setEditingBudget(false);
-  };
 
   const handleClearData = () => {
     Alert.alert(
@@ -165,64 +145,17 @@ export default function SettingsScreen({ navigation }) {
         )}
       </View>
 
-      {/* Budget Section */}
-      <View style={styles.sectionCard}>
+      {/* Category Budgets shortcut */}
+      <TouchableOpacity style={styles.sectionCard} onPress={() => navigation.navigate('Budgets')} activeOpacity={0.8}>
         <View style={styles.sectionHeader}>
-          <MaterialIcons name="account-balance-wallet" size={18} color={Colors.accent} />
-          <Text style={styles.sectionTitle}>Monthly Budget</Text>
+          <MaterialIcons name="pie-chart" size={18} color={Colors.accent} />
+          <Text style={styles.sectionTitle}>Category Budgets</Text>
+          <MaterialIcons name="chevron-right" size={20} color={Colors.textMuted} style={{ marginLeft: 'auto' }} />
         </View>
-
-        <View style={styles.budgetDisplay}>
-          {editingBudget ? (
-            <View style={styles.budgetEditRow}>
-              <Text style={styles.currSymbol}>{layerCurrency}</Text>
-              <TextInput
-                style={styles.budgetInput}
-                value={budget}
-                onChangeText={setBudget}
-                keyboardType="numeric"
-                autoFocus
-                maxLength={10}
-              />
-              <TouchableOpacity style={styles.budgetSaveBtn} onPress={saveBudget}>
-                <MaterialIcons name="check" size={18} color="#fff" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.budgetCancelBtn} onPress={() => { setBudget(String(layerBudget)); setEditingBudget(false); }}>
-                <MaterialIcons name="close" size={18} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity style={styles.budgetRow} onPress={() => setEditingBudget(true)}>
-              <Text style={styles.budgetAmount}>
-                {formatAmount(layerBudget, layerCurrency)}
-              </Text>
-              <MaterialIcons name="edit" size={18} color={Colors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Budget Status */}
-        <View style={[styles.budgetStatus, exceeded ? styles.budgetStatusWarn : styles.budgetStatusOk]}>
-          <MaterialIcons
-            name={exceeded ? 'warning' : 'check-circle'}
-            size={16}
-            color={exceeded ? Colors.warning : Colors.success}
-          />
-          <Text style={[styles.budgetStatusText, { color: exceeded ? Colors.warning : Colors.success }]}>
-            {exceeded
-              ? `Over by ${formatAmount(totalExpense - layerBudget, layerCurrency)}`
-              : `${Math.round(budgetPct)}% used — ${formatAmount(layerBudget - totalExpense, layerCurrency)} remaining`
-            }
-          </Text>
-        </View>
-
-        <View style={styles.budgetBar}>
-          <View style={[
-            styles.budgetBarFill,
-            { width: `${Math.min(budgetPct, 100)}%`, backgroundColor: exceeded ? Colors.warning : Colors.accent }
-          ]} />
-        </View>
-      </View>
+        <Text style={styles.budgetHint}>
+          Set spending limits per category over weekly, monthly, custom or lifetime periods.
+        </Text>
+      </TouchableOpacity>
 
       {/* Currency Section */}
       <View style={styles.sectionCard}>
@@ -393,6 +326,7 @@ const getStyles = (Colors) => StyleSheet.create({
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: Spacing.md },
   sectionTitle: { fontFamily: Typography.semiBold, fontSize: 15, color: Colors.textPrimary },
 
+  budgetHint: { fontFamily: Typography.regular, fontSize: 13, color: Colors.textSecondary, lineHeight: 19 },
   budgetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   budgetAmount: { fontFamily: Typography.mono, fontSize: 28, color: Colors.textPrimary },
   budgetEditRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

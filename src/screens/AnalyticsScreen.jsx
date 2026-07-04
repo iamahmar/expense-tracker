@@ -465,8 +465,26 @@ export default function AnalyticsScreen() {
         body: `Across ${txnCount} expense transaction${txnCount !== 1 ? 's' : ''} this month.`,
       });
     }
+    // Forecasted end-of-month spend — only meaningful for the ongoing month.
+    const now = new Date();
+    const viewingCurrentMonth =
+      selectedMonth.getMonth() === now.getMonth() &&
+      selectedMonth.getFullYear() === now.getFullYear();
+    if (viewingCurrentMonth && totalExpense > 0) {
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const elapsed = now.getDate();
+      if (elapsed < daysInMonth && elapsed > 0) {
+        const forecast = (totalExpense / elapsed) * daysInMonth;
+        list.push({
+          icon: 'insights',
+          color: Colors.accent,
+          title: `Projected ${formatAmount(forecast, layerCurrency)} by month end`,
+          body: `At your current pace, that's ${formatAmount(forecast - totalExpense, layerCurrency)} more over the remaining ${daysInMonth - elapsed} day${daysInMonth - elapsed !== 1 ? 's' : ''}.`,
+        });
+      }
+    }
     return list;
-  }, [sortedCats, totalIncome, totalExpense, avgDaily, txnCount]);
+  }, [sortedCats, totalIncome, totalExpense, avgDaily, txnCount, selectedMonth, layerCurrency, Colors]);
 
   const changeMonth = (delta) => {
     setSelectedMonth(prev => {

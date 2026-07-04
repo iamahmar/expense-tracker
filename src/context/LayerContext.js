@@ -8,8 +8,10 @@ import {
   loadActiveLayerId,
   saveActiveLayerId,
   deleteLayerTransactions,
+  deleteLayerCategoryBudgets,
 } from '../utils/storage';
 import { useApp } from './AppContext';
+import { useCategoryBudgets } from './CategoryBudgetContext';
 
 const LayerContext = createContext(null);
 
@@ -35,6 +37,7 @@ function reducer(state, action) {
 export function LayerProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { refreshTransactions } = useApp();
+  const { refreshBudgets } = useCategoryBudgets();
 
   useEffect(() => {
     (async () => {
@@ -61,14 +64,16 @@ export function LayerProvider({ children }) {
     const updated = await storageDeleteLayer(layerId);
     dispatch({ type: 'SET_LAYERS', layers: updated });
     await deleteLayerTransactions(layerId);
+    await deleteLayerCategoryBudgets(layerId);
     await refreshTransactions();
+    await refreshBudgets();
 
     if (state.activeLayerId === layerId) {
       const nextId = updated[0]?.id ?? null;
       await saveActiveLayerId(nextId);
       dispatch({ type: 'SET_ACTIVE', activeLayerId: nextId });
     }
-  }, [state.activeLayerId, refreshTransactions]);
+  }, [state.activeLayerId, refreshTransactions, refreshBudgets]);
 
   const switchLayer = useCallback(async (layerId) => {
     await saveActiveLayerId(layerId);
